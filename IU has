@@ -1,0 +1,295 @@
+--[[
+  IU has  -  แผงเครื่องมือแอดมิน/ทดสอบ สำหรับแมพที่ตัวเองสร้างใน Roblox Studio
+  แบ่งเป็น 2 สคริปต์ (คัดลอกแยกกัน):
+
+  1) Script (ธรรมดา)  -> วางใน ServerScriptService  ชื่อ "IUhas_Server"
+  2) LocalScript      -> วางใน StarterPlayer > StarterPlayerScripts  ชื่อ "IUhas_Client"
+
+  ใส่ UserId ของคุณในลิสต์ ADMINS ทั้ง 2 สคริปต์ (ต้องตรงกัน)
+  ไอเทมในแมพต้องตั้งชื่อให้มีคำว่า "Knife" (มีด) หรือ "Gun" (ปืน)
+]]
+
+------------------------------------------------------------
+-- ===== 1) SERVER SCRIPT : IUhas_Server =====
+------------------------------------------------------------
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ADMINS = { 1234567890 } -- <<< ใส่ UserId ของคุณ
+local DAMAGE = 100
+
+local remote = Instance.new("RemoteEvent")
+remote.Name = "IUhasEvent"
+remote.Parent = ReplicatedStorage
+
+local function isAdmin(plr)
+	return table.find(ADMINS, plr.UserId) ~= nil
+end
+
+local function hasTool(plr, keyword)
+	keyword = keyword:lower()
+	local containers = { plr.Character, plr:FindFirstChild("Backpack") }
+	for _, c in ipairs(containers) do
+		if c then
+			for _, t in ipairs(c:GetChildren()) do
+				if t:IsA("Tool") and t.Name:lower():find(keyword) then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+local function damage(plr)
+	local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+	if hum and hum.Health > 0 then
+		hum:TakeDamage(DAMAGE)
+	end
+end
+
+Players.PlayerAdded:Connect(function(plr)
+	plr:SetAttribute("IUAdmin", isAdmin(plr))
+end)
+for _, p in ipairs(Players:GetPlayers()) do
+	p:SetAttribute("IUAdmin", isAdmin(p))
+end
+
+remote.OnServerEvent:Connect(function(plr, action)
+	if not isAdmin(plr) then return end
+
+	if action == "KillAll" and hasTool(plr, "knife") then
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= plr then damage(p) end
+		end
+	elseif action == "ShootMurderer" and hasTool(plr, "gun") then
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= plr and hasTool(p, "knife") then damage(p) end
+		end
+	end
+end)
+
+------------------------------------------------------------
+-- ===== 2) LOCALSCRIPT : IUhas_Client =====
+-- (คัดลอกส่วนล่างนี้ไปใส่ LocalScript แยกต่างหาก)
+------------------------------------------------------------
+--[[
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local cam = workspace.CurrentCamera
+local remote = ReplicatedStorage:WaitForChild("IUhasEvent")
+
+if not player:GetAttribute("IUAdmin") then
+	player:GetAttributeChangedSignal("IUAdmin"):Wait()
+	if not player:GetAttribute("IUAdmin") then return end
+end
+
+local state = { esp = false, fly = false, noclip = false, killArm = false, shootArm = false, lock = false }
+
+-- ---------- helpers ----------
+local function hasTool(plr, keyword)
+	keyword = keyword:lower()
+	for _, c in ipairs({ plr.Character, plr:FindFirstChild("Backpack") }) do
+		if c then
+			for _, t in ipairs(c:GetChildren()) do
+				if t:IsA("Tool") and t.Name:lower():find(keyword) then return true end
+			end
+		end
+	end
+	return false
+end
+
+local function getRoot()
+	local ch = player.Character
+	return ch and ch:FindFirstChild("HumanoidRootPart"), ch and ch:FindFirstChildOfClass("Humanoid")
+end
+
+-- ---------- UI ----------
+local gui = Instance.new("ScreenGui")
+gui.Name = "IUhasGui"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.fromOffset(46, 46)
+toggleBtn.Position = UDim2.new(0, 12, 0.5, -23)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+toggleBtn.Text = "AX"
+toggleBtn.Font = Enum.Font.GothamBlack
+toggleBtn.TextSize = 18
+toggleBtn.TextColor3 = Color3.fromRGB(0, 255, 200)
+toggleBtn.Parent = gui
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+local ts = Instance.new("UIStroke", toggleBtn)
+ts.Color = Color3.fromRGB(0, 255, 200); ts.Thickness = 2
+
+local win = Instance.new("Frame")
+win.Size = UDim2.fromOffset(230, 330)
+win.Position = UDim2.new(0, 68, 0.5, -165)
+win.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+win.Visible = false
+win.Active = true
+win.Draggable = true
+win.Parent = gui
+Instance.new("UICorner", win).CornerRadius = UDim.new(0, 12)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 34)
+title.BackgroundTransparency = 1
+title.Text = "IU has"
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 18
+title.TextColor3 = Color3.fromRGB(0, 255, 200)
+title.Parent = win
+
+local layout = Instance.new("UIListLayout", win)
+layout.Padding = UDim.new(0, 6)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+local pad = Instance.new("UIPadding", win)
+pad.PaddingTop = UDim.new(0, 36); pad.PaddingBottom = UDim.new(0, 8)
+
+toggleBtn.MouseButton1Click:Connect(function() win.Visible = not win.Visible end)
+
+local function makeToggle(text, key, onChange)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(1, -20, 0, 36)
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 14
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.Parent = win
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+	local function refresh()
+		b.Text = text .. (state[key] and "  [เปิด]" or "  [ปิด]")
+		b.BackgroundColor3 = state[key] and Color3.fromRGB(0, 140, 110) or Color3.fromRGB(45, 45, 60)
+	end
+	refresh()
+	b.MouseButton1Click:Connect(function()
+		state[key] = not state[key]
+		refresh()
+		if onChange then onChange(state[key]) end
+	end)
+end
+
+makeToggle("มองดูบทบาท", "esp")
+makeToggle("บิน", "fly")
+makeToggle("ทะลุกำแพง", "noclip")
+makeToggle("ปาดทีเดียวหายยกเซิฟ", "killArm")
+makeToggle("ยิงฆ่าตกร", "shootArm")
+makeToggle("ล็อคฆ่าตกร", "lock")
+
+-- ---------- ESP (แดง=มีด / น้ำเงิน=ปืน / เขียว=ไม่มีไอเทม) ----------
+local function getHighlight(plr)
+	local ch = plr.Character
+	if not ch then return end
+	local h = ch:FindFirstChild("IUhasHL")
+	if not h then
+		h = Instance.new("Highlight")
+		h.Name = "IUhasHL"
+		h.FillTransparency = 0.5
+		h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		h.Parent = ch
+	end
+	return h
+end
+
+task.spawn(function()
+	while true do
+		task.wait(0.3)
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr ~= player then
+				local h = getHighlight(plr)
+				if h then
+					h.Enabled = state.esp
+					if hasTool(plr, "knife") then
+						h.FillColor = Color3.fromRGB(255, 0, 0)
+					elseif hasTool(plr, "gun") then
+						h.FillColor = Color3.fromRGB(0, 100, 255)
+					else
+						h.FillColor = Color3.fromRGB(0, 255, 0)
+					end
+				end
+			end
+		end
+	end
+end)
+
+-- ---------- บิน : ไปทางที่กล้องหัน เดินไปข้างหน้า = บินไปข้างหน้าตามกล้อง ----------
+local controls
+pcall(function()
+	controls = require(player.PlayerScripts:WaitForChild("PlayerModule")):GetControls()
+end)
+local SPEED = 60
+
+RunService.Heartbeat:Connect(function()
+	local root, hum = getRoot()
+	if not root or not hum then return end
+
+	if state.fly then
+		local move = controls and controls:GetMoveVector() or Vector3.zero
+		local dir = cam.CFrame:VectorToWorldSpace(move)
+		root.AssemblyLinearVelocity = dir * SPEED
+		hum.PlatformStand = true
+		-- เลี้ยวตามทิศกล้อง
+		local look = cam.CFrame.LookVector
+		root.CFrame = CFrame.lookAt(root.Position, root.Position + Vector3.new(look.X, 0, look.Z))
+	else
+		if hum.PlatformStand then hum.PlatformStand = false end
+	end
+end)
+
+-- ---------- ทะลุกำแพง (ถ้าเปิดบินด้วย = ทะลุทุกอย่าง) ----------
+RunService.Stepped:Connect(function()
+	local ch = player.Character
+	if not ch then return end
+	if state.noclip or state.fly and state.noclip then
+		for _, p in ipairs(ch:GetDescendants()) do
+			if p:IsA("BasePart") then p.CanCollide = false end
+		end
+	end
+end)
+
+-- ---------- ล็อคฆ่าตกร ----------
+RunService.RenderStepped:Connect(function()
+	if not state.lock then return end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= player and hasTool(plr, "knife") then
+			local head = plr.Character and plr.Character:FindFirstChild("Head")
+			if head then
+				cam.CFrame = CFrame.lookAt(cam.CFrame.Position, head.Position)
+				break
+			end
+		end
+	end
+end)
+
+-- ---------- ปาดทีเดียว / ยิงฆ่าตกร : ทำงานเมื่อใช้ไอเทม 1 ครั้ง ----------
+local hooked = {}
+local function hookTool(tool)
+	if hooked[tool] or not tool:IsA("Tool") then return end
+	hooked[tool] = true
+	tool.Activated:Connect(function()
+		local n = tool.Name:lower()
+		if n:find("knife") and state.killArm then
+			remote:FireServer("KillAll")
+		elseif n:find("gun") and state.shootArm then
+			remote:FireServer("ShootMurderer")
+		end
+	end)
+end
+
+local function watch(container)
+	for _, t in ipairs(container:GetChildren()) do hookTool(t) end
+	container.ChildAdded:Connect(hookTool)
+end
+
+watch(player:WaitForChild("Backpack"))
+player.CharacterAdded:Connect(function(ch)
+	watch(ch)
+	watch(player:WaitForChild("Backpack"))
+end)
+if player.Character then watch(player.Character) end
+]]
